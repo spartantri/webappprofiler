@@ -6,7 +6,7 @@
 # Author:      spartantri
 #
 # Created:     17/06/2016
-# Copyright:   (c) mleos 2016
+# Copyright:   (c) spartantri 2016
 # License:     GPLv3
 # -------------------------------------------------------------------------------
 import re
