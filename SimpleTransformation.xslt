@@ -61,12 +61,12 @@ SecAction &quot;setsid:%{REQUEST_COOKIES:<xsl:value-of select="@name"/>}&quot;
 <xsl:template match="Parameter">
 <xsl:choose>
 <xsl:when test="./@ratio &gt; 0 and ./@score &gt; 0">
-<xsl:if test="count(@required) > 0">SecRule &amp;ARGS:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,setvar:tx.score=+<xsl:value-of select="./@ratio" />,pass,msg:'Missing required parameter <xsl:value-of select="./@name"/>'"</xsl:if>
-    SecRule ARGS:<xsl:value-of select="./@name" /> &quot;!<xsl:value-of select="./@regexp"/>&quot; id:9931733,t:none,t:urlDecode,pass,setvar:tx.score=+<xsl:value-of select="@score"/>,phase:2<xsl:if test="./@id != ''">,id:<xsl:value-of select="./@id"/></xsl:if>
+<xsl:if test="count(@required) > 0">    SecRule &amp;ARGS:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+<xsl:value-of select="./@ratio" />,pass,msg:'Missing required parameter <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule ARGS:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+<xsl:value-of select="@score"/>"
 </xsl:when>
 <xsl:otherwise>
-<xsl:if test="count(@required) > 0">SecRule &amp;ARGS:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,setvar:tx.score=+10,pass,msg:'Missing required parameter <xsl:value-of select="./@name"/>'"</xsl:if>
-    SecRule ARGS:<xsl:value-of select="./@name" /> &quot;!<xsl:value-of select="./@regexp"/>&quot; id:9931733,t:none,t:urlDecode,pass,setvar:tx.score=+10,phase:2<xsl:if test="./@id != ''">,id:<xsl:value-of select="./@id"/></xsl:if>
+<xsl:if test="count(@required) > 0">    SecRule &amp;ARGS:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+10,pass,msg:'Missing required parameter <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule ARGS:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+10"
 </xsl:otherwise>
 </xsl:choose>
 <xsl:apply-templates />
@@ -77,11 +77,34 @@ SecAction &quot;setsid:%{REQUEST_COOKIES:<xsl:value-of select="@name"/>}&quot;
 <!--  The following template creates a method-check       -->
 <!--                                                      -->
 <xsl:template match="Method">
-    SecRule REQUEST_METHOD &quot;!^<xsl:value-of select="./@value"/>$&quot; id:9931733,phase:2,t:none,log,auditlog,skip:<xsl:value-of select="count(child::*) + 1 + count(child::Parameter)"/>
-    SecAction setvar:tx.method_checked=1,pass,nolog,noauditlog<xsl:apply-templates select="Parameter|CreateToken|CheckToken"/>
+    SecRule REQUEST_METHOD &quot;!@rx ^<xsl:value-of select="./@value"/>$&quot; "id:9931733,phase:2,t:none,log,auditlog,skip:<xsl:value-of select="count(child::*) + 1 + count(child::Parameter)"/>"
+    SecAction setvar:tx.method_checked=1,pass,nolog,noauditlog
+    <xsl:apply-templates select="Parameter|CreateToken|CheckToken|Cookie|Header"/>
 </xsl:template>
 <xsl:template match="Cookie">
-    SecRule REQUEST_COOKIES:<xsl:value-of select="./@name"/> &quot;!<xsl:value-of select="./@regexp"/>&quot; &quot;id:9931733,setvar:tx.score=+<xsl:value-of select="@score"/>,phase:2,pass&quot;<xsl:apply-templates />
+<xsl:choose>
+<xsl:when test="./@ratio &gt; 0 and ./@score &gt; 0">
+<xsl:if test="count(@required) > 0">    SecRule &amp;REQUEST_COOKIES:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+<xsl:value-of select="./@ratio" />,pass,msg:'Missing required cookie <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule REQUEST_COOKIES:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+<xsl:value-of select="@score"/>"
+</xsl:when>
+<xsl:otherwise>
+<xsl:if test="count(@required) > 0">    SecRule &amp;REQUEST_COOKIES:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+10,pass,msg:'Missing required cookie <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule REQUEST_COOKIES:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+10"
+</xsl:otherwise>
+</xsl:choose>
+</xsl:template>
+
+<xsl:template match="Header">
+<xsl:choose>
+<xsl:when test="./@ratio &gt; 0 and ./@score &gt; 0">
+<xsl:if test="count(@required) > 0">    SecRule &amp;REQUEST_HEADER:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+<xsl:value-of select="./@ratio" />,pass,msg:'Missing required header <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule REQUEST_HEADER:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+<xsl:value-of select="@score"/>"
+</xsl:when>
+<xsl:otherwise>
+<xsl:if test="count(@required) > 0">    SecRule &amp;REQUEST_HEADER:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+10,pass,msg:'Missing required header <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule REQUEST_HEADER:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+10"
+</xsl:otherwise>
+</xsl:choose>
 </xsl:template>
 
 <xsl:template match="text()">

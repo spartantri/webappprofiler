@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup
 # from urlparse import urlparse
 
 # Initialization variables
-zap = ZAPv2(proxies={'http': 'http://127.0.0.1:8090', 'https': 'http://127.0.0.1:8090'})
+zap = ZAPv2(proxies={'http': 'http://127.0.0.1:8080', 'https': 'http://127.0.0.1:8080'})
 parseablecodes = (200, 301, 302, 304, 401, 500, 501)
 simple_regexes = {}
 complex_regexes = {}
@@ -41,7 +41,8 @@ cur = db.cursor()
 # Set print_details to generate and print row array in memory
 print_details = 0
 output_file = 'test.xml'
-audit_log = 'modsec_audit.log'
+# audit_log = 'modsec_audit.log'
+audit_log = False
 id_site = 0
 modsecurity_starting_ruleid = 9990000
 
@@ -156,8 +157,8 @@ def regex_builder():
     Creates the global variables including the different regular expressions to use in pattern identification."""
     global simple_regexes, complex_regexes, blacklist_regexes, when_everything_goes_bad_regexes
     # Simple regexes
-    simple_regexes = {'0numeric': '[\d]+', '1alphabetic': '[a-zA-Z]+', '2hex': '[a-fA-F0-9]+',
-                      '3alphanumeric': '[a-zA-Z0-9]+', 'punctuation': '[,\.\'\-_]+', '5b64': '[a-zA-Z0-9+/=]+'}
+    simple_regexes = {'0numeric': '\d', '1alphabetic': 'a-zA-Z', '2hex': 'a-fA-F0-9',
+                      '3alphanumeric': 'a-zA-Z0-9', 'punctuation': ',\.\'\-_', '5b64': 'a-zA-Z0-9+/='}
     simple_regexes.update({'6numeric_punctuation': '{0}{1}'.format(simple_regexes['punctuation'],
                                                                    simple_regexes['0numeric'])})
     simple_regexes.update({'7alphabetic_punctuation': '{0}{1}'.format(simple_regexes['punctuation'],
@@ -182,7 +183,7 @@ def regex_builder():
     complex_regexes.update(email_regex)
     complex_regexes.update(base64_regex)
     # Other regexes
-    blacklist_regexes = {'command': '[&;|\$`]', 'redirect': '[<>]', 'path': '[/\\\\]', 'group': '[\(\)\{\}]'}
+    blacklist_regexes = {'command': '&;|\$`', 'redirect': '<>', 'path': '/\\\\', 'group': '\(\)\{\}'}
     when_everything_goes_bad_regexes = {'hailmary': '.*'}
 
 
@@ -196,6 +197,7 @@ def regex_positive(match_this):
     regex_trail = ']{' + payload_lenght + '}$'
     for regex_test in sorted(simple_regexes.keys()):
         regex = regex_begin + simple_regexes[regex_test] + regex_trail
+        print regex
         if re.match(regex, match_this):
             return regex_test, payload_lenght
     return 'hailmary', payload_lenght
@@ -413,6 +415,7 @@ def get_source():
     else:
         return zap.core.messages()
 
+
 def parse_connection_database(filtered):
     """Parse contents and dump into database.
 
@@ -511,6 +514,7 @@ def parse_connection_database(filtered):
                             str(regex_request_http_negative), len(parsed_cookies.keys()), str(parsed_cookies.keys()),
                             str(regex_request_cookie_positive), str(regex_request_cookie_negative)))
                 db.commit()
+                # print requests
                 write_message(requests)
     if print_details == 1:
         print 'HOST :', filtered
@@ -715,6 +719,7 @@ def parse_locations2(filtered):
     write_output.write(tostring(xml_profile))
     write_output.close()
     return
+
 
 def xml_prettify(xml, encoding=None, formatter="minimal"):
     soup = BeautifulSoup(xml, 'lxml')
