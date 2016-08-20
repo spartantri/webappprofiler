@@ -197,8 +197,10 @@ def regex_positive(match_this):
     regex_trail = ']{' + payload_lenght + '}$'
     for regex_test in sorted(simple_regexes.keys()):
         regex = regex_begin + simple_regexes[regex_test] + regex_trail
-        print regex
         if re.match(regex, match_this):
+            new_regex_name = ''.join(['(\'',regex_test,'\', \'',str(payload_lenght),'\')'])
+            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)',(new_regex_name, regex))
+            db.commit()
             return regex_test, payload_lenght
     return 'hailmary', payload_lenght
 
@@ -237,10 +239,26 @@ def regex_specific(match_this, regex_test):
 
 
 def regex_comparer(regex1, regex2):
-    if regex1[0] > regex2[0]:
-        return regex1
+    if '\', \'' in regex1:
+        regexa = regex1.split(', ')
+    if '\', \'' in regex2:
+        regexb = regex2.split(', ')
+    if not regexa and not regexb:
+        if regex1 > regex2:
+            return regex1
+        else:
+            return regex2
     else:
-        return regex2
+        if regexa[0] == regexb[0]:
+            if int(regexa[1][1:-2]) > int(regexb[1][1:-2]):
+                return regex1
+            else:
+                return regex2
+        else:
+            if regexa[0] > regexb[0]:
+                return regex1
+            else:
+                return regex2
     pass
 
 
@@ -280,11 +298,11 @@ def write_headers(id_resource, item_details, detected_headers):
                 if http_headers_regex_pos[http_header] == detected_headers[http_header]:
                     pass
                 else:
-                    print 'Type mismatch:', http_header, http_headers_regex_pos[http_header], \
-                        detected_headers[http_header],
+                    # print 'Type mismatch:', http_header, http_headers_regex_pos[http_header], \
+                    #    detected_headers[http_header],
                     detected_headers[http_header] = regex_comparer(http_headers_regex_pos[http_header],
                                                                    detected_headers[http_header])
-                    print ' Updated to: ', detected_headers[http_header]
+                    # print ' Updated to: ', detected_headers[http_header]
             else:
                 detected_headers[http_header] = http_headers_regex_pos[http_header]
     # print tabulate([line for line in row_summary], headers=header)
@@ -308,11 +326,10 @@ def write_cookies(id_resource, item_details, detected_cookies):
                 if cookie_regex_pos[cookie] == detected_cookies[cookie]:
                     pass
                 else:
-                    print 'Type mismatch:', cookie, cookie_regex_pos[cookie], \
-                        detected_cookies[cookie],
+                    # print 'Type mismatch:', cookie, cookie_regex_pos[cookie], detected_cookies[cookie],
                     detected_cookies[cookie] = regex_comparer(cookie_regex_pos[cookie],
                                                               detected_cookies[cookie])
-                    print ' Updated to: ', detected_cookies[cookie]
+                    # print ' Updated to: ', detected_cookies[cookie]
             else:
                 detected_cookies[cookie] = cookie_regex_pos[cookie]
     for cookie in detected_cookies:
@@ -334,10 +351,10 @@ def write_parameters(id_resource, item_details, detected_parameters):
                 if parameters_regex_pos[parameter] == detected_parameters[parameter]:
                     pass
                 else:
-                    print 'Type mismatch:', parameter, parameters_regex_pos[parameter], detected_parameters[parameter],
+                    # print 'Type mismatch:',parameter, parameters_regex_pos[parameter], detected_parameters[parameter],
                     detected_parameters[parameter] = regex_comparer(parameters_regex_pos[parameter],
                                                                     detected_parameters[parameter])
-                    print ' Updated to: ', detected_parameters[parameter]
+                    # print ' Updated to: ', detected_parameters[parameter]
             else:
                 detected_parameters[parameter] = parameters_regex_pos[parameter]
     # print tabulate([line for line in row_summary], headers=header)
@@ -472,7 +489,7 @@ def parse_connection_database(filtered):
                         regex_request_negative.update({str(argument): regex_bad})
                     elif regex[0] == '5b64':
                         regex = regex_specific(str(querystring_arguments[argument][0]), 'base64')
-                    regex_request_positive.update({str(argument): regex[0]})
+                    regex_request_positive.update({str(argument): str(regex)})
                 for httpheader in p.get_headers():
                     regex = regex_positive(str(p.get_headers()[httpheader]))
                     if regex[0] == 'hailmary':
@@ -480,7 +497,7 @@ def parse_connection_database(filtered):
                         regex_request_http_negative.update({str(httpheader): regex_bad})
                     elif regex[0] == '5b64':
                         regex = regex_specific(str(p.get_headers()[httpheader]), 'base64')
-                    regex_request_http_positive.update({str(httpheader): regex[0]})
+                    regex_request_http_positive.update({str(httpheader): str(regex)})
                     # print httpheader, regex[0], regex_bad
                 # print len(p.get_headers()), p.get_headers() ,regex_request_http_positive, regex_request_http_negative
                 for cookie in parsed_cookies:
@@ -491,7 +508,7 @@ def parse_connection_database(filtered):
                         regex_request_cookie_negative.update({str(cookie): regex_bad})
                     elif regex[0] == '5b64':
                         regex = regex_specific(str(parsed_cookies[cookie]), 'base64')
-                    regex_request_cookie_positive.update({str(cookie): regex[0]})
+                    regex_request_cookie_positive.update({str(cookie): str(regex)})
                     # print cookie, regex[0], regex_bad
                 # if len(parsed_cookies) > 0:
                     # print len(parsed_cookies), parsed_cookies ,regex_request_cookie_positive, regex_request_cookie_negative
@@ -717,6 +734,7 @@ def parse_locations2(filtered):
                 xml_cookie.set('required', 'False')
                 # print http_header, regex_pos, regex
     write_output.write(tostring(xml_profile))
+    # write_output.write(xml_prettify(tostring(xml_profile)))
     write_output.close()
     return
 
