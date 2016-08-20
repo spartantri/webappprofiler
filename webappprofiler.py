@@ -20,9 +20,9 @@ import ast
 from zapv2 import ZAPv2
 from http_parser.pyparser import HttpParser
 from tabulate import tabulate
-from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement, Comment, tostring
 from bs4 import BeautifulSoup
+from simplerules import transform_xml
 
 # from sys import stdout
 # from sets import Set
@@ -45,6 +45,8 @@ output_file = 'test.xml'
 audit_log = False
 id_site = 0
 modsecurity_starting_ruleid = 9990000
+input_xml, transformation_xslt = 'test.xml', 'SimpleTransformation.xslt'
+
 
 def init_db(cur, zero=False):
     """Initialize database for aggregation.
@@ -143,9 +145,9 @@ def site_filter():
             for idx, site in enumerate(zap.core.sites):
                 site_list.append(urlparse.urlparse(site).netloc)
                 print idx, urlparse.urlparse(site).netloc
-            site_filter = int(raw_input("Coose a site : "))
-            print "Setting site filter to: %s" % (site_list[site_filter])
-            return str(site_list[site_filter])
+            site_selection = int(raw_input("Coose a site : "))
+            print "Setting site filter to: %s" % (site_list[site_selection])
+            return str(site_list[site_selection])
         except:
             print "Wrong selection, try again"
             time.sleep(2)
@@ -167,7 +169,7 @@ def regex_builder():
                                                                         simple_regexes['3alphanumeric'])})
     # Complex regexes
     octet = ' 25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2}?'
-    ip_regex = {'ips': '\b(?:' + octet + '\.){3}(?:' + octet + ')\b'}
+    ip_regex = {'ips': '(?:' + octet + '\.){3}(?:' + octet + ')'}
     complex_regexes.update(ip_regex)
     date_m = '(?:0?[1-9]|1[012])'
     date_d = '(?:0?[1-9]|[12][0-9]|3[01])'
@@ -412,7 +414,7 @@ def parse_cookies(cookies):
     """Parse cookies.
 
                     Parse cookies, and return dictionary with cookie name as key and all details as value."""
-    import Cookie
+    # import Cookie
     parsed_cookies = {}
     # print cookies
     cookie_string = str(cookies)
@@ -639,7 +641,7 @@ def parse_locations2(filtered):
     """Parse contents and dump into database.
 
                 Parse contents, summarize data and dump into database."""
-    global id_site
+    global id_site, modsecurity_starting_ruleid
     item_id = modsecurity_starting_ruleid
     write_output = open(output_file, 'w')
     write_output.write('<?xml version="1.0"?>')
@@ -734,25 +736,28 @@ def parse_locations2(filtered):
                 xml_cookie.set('required', 'False')
                 # print http_header, regex_pos, regex
     write_output.write(tostring(xml_profile))
-    # write_output.write(xml_prettify(tostring(xml_profile)))
+    # regex_fixbs4 = re.compile(r'<(?:/)?(?:html|body|head)>')
+    # xml_output = regex_fixbs4.sub('',xml_prettify(tostring(xml_profile)))
+    # write_output.write(xml_output)
     write_output.close()
+    modsecurity_starting_ruleid = item_id
     return
 
 
 def xml_prettify(xml, encoding=None, formatter="minimal"):
     soup = BeautifulSoup(xml, 'lxml')
     r = re.compile(r'^(\s*)', re.MULTILINE)
-    return r.sub(r'\1\1\1\1', soup.prettify(encoding, formatter))
+    return r.sub(r'\1\1\1', soup.prettify(encoding, formatter))
 
 
 def auditlog_reader():
     messages = []
     lines = ['']
-    id = 1
-    pattern_requestheader = re.compile('--([a-f0-9]{8})-B-(.+?)--[a-f0-9]{8}', re.MULTILINE|re.DOTALL)
-    pattern_requestbody = re.compile('--([a-f0-9]{8})-C-(.+?)--[a-f0-9]{8}', re.MULTILINE|re.DOTALL)
-    pattern_responseheader = re.compile('--([a-f0-9]{8})-F-(.+?)--[a-f0-9]{8}', re.MULTILINE|re.DOTALL)
-    pattern_responsebody = re.compile('--([a-f0-9]{8})-E-(.+?)--[a-f0-9]{8}', re.MULTILINE|re.DOTALL)
+    message_id = 1
+    pattern_requestheader = re.compile('--([a-f0-9]{8})-B-(.+?)--[a-f0-9]{8}', re.MULTILINE | re.DOTALL)
+    pattern_requestbody = re.compile('--([a-f0-9]{8})-C-(.+?)--[a-f0-9]{8}', re.MULTILINE | re.DOTALL)
+    pattern_responseheader = re.compile('--([a-f0-9]{8})-F-(.+?)--[a-f0-9]{8}', re.MULTILINE | re.DOTALL)
+    pattern_responsebody = re.compile('--([a-f0-9]{8})-E-(.+?)--[a-f0-9]{8}', re.MULTILINE | re.DOTALL)
     pattern_end = re.compile('^--[a-f0-9]{8}-Z-')
     with open(audit_log, 'r') as f:
         for line in f:
@@ -780,8 +785,8 @@ def auditlog_reader():
                     responsebody = responsebody.group(2)[2:]
                 record = {u'requestBody': unicode(requestbody), u'requestHeader': unicode(requestheader),
                           u'responseHeader': unicode(responseheader), u'responseBody': unicode(responsebody),
-                          u'id': id}
-                id += 1
+                          u'id': message_id}
+                message_id += 1
                 messages.append(record)
                 lines.append('')
             else:
@@ -790,14 +795,14 @@ def auditlog_reader():
 
 
 def main():
-    '''Main function outputs items to create positive security model.
+    """Main function outputs items to create positive security model.
 
     This function will extract from the ZAP session file for a given site all the different URI, parameters,
     cookies, headers and types into a XML output to be later transformed into modsecurity rules that follow a
     positive security model.
     #ZAP messages is a list of dict {id,requestHeader,requestBody,responseHeader,responseBody,cookieParams,note}
     #every element in the dict is a unicode value
-    '''
+    """
     regex_builder()
     if audit_log:
         filtered = 'auditlog'
@@ -823,7 +828,9 @@ def main():
         rows_summary.append(row_summary)
     print 'Records : %d' % (len(rows_summary))
     print tabulate([line for line in rows_summary], headers=header_summary)
+    print '\n\n'
     parse_locations2(filtered)
+    transform_xml(input_xml, transformation_xslt, modsecurity_starting_ruleid)
     pass
 
 

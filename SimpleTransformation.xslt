@@ -2,11 +2,11 @@
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 <xsl:output method="text"/>
 <xsl:template match="/Profile">#
-# $Id: SimpleTransformation.xslt 55 2007-10-03 22:50:56Z chris@jwall.org $
+# Based on $Id: SimpleTransformation.xslt 55 2007-10-03 22:50:56Z chris@jwall.org $
 #
-# This ruleset has been compiled using xslt transformation
-#
-#  2016-08-09 18:30 spartantri@gmail.com
+# This ruleset has been compiled using xslt transformation includes rules for:
+#   Parameters, Headers and Cookies checked for each registered resource
+#  2016-08-20 03:14 spartantri@gmail.com
 #
 <xsl:apply-templates><xsl:with-param name="path" select="''"/></xsl:apply-templates>
 
