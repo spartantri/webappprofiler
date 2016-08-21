@@ -746,7 +746,8 @@ def parse_locations2(filtered):
     return
 
 
-def xml_prettify(xml):
+
+def xml_prettify(xml, encoding=None, formatter="minimal"):
     soup = BeautifulSoup(xml, 'lxml')
     r = re.compile(r'^(\s*)', re.MULTILINE)
     return r.sub(r'\1\1\1', soup.prettify(encoding, formatter))
