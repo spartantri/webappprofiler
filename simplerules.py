@@ -49,7 +49,7 @@ def transform_xml(input_xml, transformation_xslt, modsecurity_starting_ruleid=99
 
 
 def main():
-    transform_xml('test.xml', 'SimpleTransformation.xslt', 9980000, True)
+    transform_xml('test.xml', 'SimpleTransformation.xslt', 9980000, False)
     pass
 
 

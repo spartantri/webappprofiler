@@ -1,13 +1,15 @@
 <?xml version="1.0" ?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 <xsl:output method="text"/>
-<xsl:template match="/Profile">#
+<xsl:template match="/Profile">
+# $Id: SimpleTransformation.xslt 5 2016-08-21 12:38 spartantri@gmail.com $
+#
+# This rule set has been compiled using xslt transformation includes rules for:
+#   Parameters, Headers, Session Cookies and Cookies checked for each registered resource
+#
+# Rules compatible with modsecurity 2.5 to 2.9+
+#
 # Based on $Id: SimpleTransformation.xslt 55 2007-10-03 22:50:56Z chris@jwall.org $
-#
-# This ruleset has been compiled using xslt transformation includes rules for:
-#   Parameters, Headers and Cookies checked for each registered resource
-#  2016-08-20 03:14 spartantri@gmail.com
-#
 <xsl:apply-templates><xsl:with-param name="path" select="''"/></xsl:apply-templates>
 
    &lt;LocationMatch &quot;^.*$&quot;&gt;
@@ -27,10 +29,20 @@ SecDefaultAction phase:2,t:none,pass,log
 
 #
 # Session-Handling    
-#    
-SecRule REQUEST_COOKIES:<xsl:value-of select="@name"/> !^$ &quot;chain,nolog,pass&quot;
-SecAction &quot;id:9931733,setsid:%{REQUEST_COOKIES:<xsl:value-of select="@name"/>}&quot;
-    
+#
+<xsl:choose>
+<xsl:when test="./@ratio &gt; 0 and ./@score &gt; 0">
+<xsl:if test="count(@required) > 0">    SecRule &amp;REQUEST_COOKIES:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+<xsl:value-of select="./@ratio" />,pass,msg:'Missing required session cookie <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule REQUEST_COOKIES:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id = ''">id:9931733,</xsl:if><xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+<xsl:value-of select="@score"/>"
+</xsl:when>
+<xsl:otherwise>
+<xsl:if test="count(@required) > 0">    SecRule &amp;REQUEST_COOKIES:<xsl:value-of select="./@name"/> "@eq 0" "id:9931733,phase:2,setvar:tx.score=+10,pass,msg:'Missing required session cookie <xsl:value-of select="./@name"/>'"</xsl:if>
+    SecRule REQUEST_COOKIES:<xsl:value-of select="./@name" /> &quot;!@rx <xsl:value-of select="./@regexp"/>&quot; "<xsl:if test="./@id = ''">id:9931733,</xsl:if><xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,t:none,t:urlDecode,pass,setvar:tx.score=+10"
+</xsl:otherwise>
+</xsl:choose>
+
+SecRule REQUEST_COOKIES:<xsl:value-of select="./@name" /> &quot;@rx <xsl:value-of select="./@regexp"/>&quot; "id:9931733,phase:2,t:none,pass,setsid:%{REQUEST_COOKIES:<xsl:value-of select="@name"/>}"
+
 </xsl:template>
 
 <xsl:template match="Resource">
@@ -79,7 +91,7 @@ SecAction &quot;id:9931733,setsid:%{REQUEST_COOKIES:<xsl:value-of select="@name"
 <xsl:template match="Method">
     SecRule REQUEST_METHOD &quot;!@rx ^<xsl:value-of select="./@value"/>$&quot; "id:9931733,phase:2,t:none,log,auditlog,skip:<xsl:value-of select="count(child::*) + 1 + count(child::Parameter)"/>"
     SecAction "id:9931733,setvar:tx.method_checked=1,pass,nolog,noauditlog"
-    <xsl:apply-templates select="Parameter|CreateToken|CheckToken|Cookie|Header"/>
+    <xsl:apply-templates select="Parameter|CreateToken|CheckToken|SessionCookie|Cookie|Header"/>
 </xsl:template>
 <xsl:template match="Cookie">
 <xsl:choose>

@@ -31,21 +31,23 @@ from simplerules import transform_xml
 # Initialization variables
 zap = ZAPv2(proxies={'http': 'http://127.0.0.1:8080', 'https': 'http://127.0.0.1:8080'})
 parseablecodes = (200, 301, 302, 304, 401, 500, 501)
-simple_regexes = {}
-complex_regexes = {}
-blacklist_regexes = {}
-when_everything_goes_bad_regexes = {}
 # Working database
 db = sqlite3.connect('../ZAPParser.sqlite', timeout=11)
 cur = db.cursor()
 # Set print_details to generate and print row array in memory
 print_details = 0
+# output xml that will describe the application locations, headers, cookies and arguments
 output_file = 'test.xml'
+# audit_log is the used to switch between zap connection and modsec auditlog
 # audit_log = 'modsec_audit.log'
 audit_log = False
 id_site = 0
 modsecurity_starting_ruleid = 9990000
 input_xml, transformation_xslt = 'test.xml', 'SimpleTransformation.xslt'
+simple_regexes = {}
+complex_regexes = {}
+blacklist_regexes = {}
+when_everything_goes_bad_regexes = {}
 
 
 def init_db(cur, zero=False):
@@ -744,7 +746,7 @@ def parse_locations2(filtered):
     return
 
 
-def xml_prettify(xml, encoding=None, formatter="minimal"):
+def xml_prettify(xml):
     soup = BeautifulSoup(xml, 'lxml')
     r = re.compile(r'^(\s*)', re.MULTILINE)
     return r.sub(r'\1\1\1', soup.prettify(encoding, formatter))
