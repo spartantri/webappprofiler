@@ -7,7 +7,7 @@
 #
 # Created:     20/08/2016
 # Copyright:   (c) spartantri 2016
-# License:     GPLv3
+# License:     Apache License Version 2.0
 # -------------------------------------------------------------------------------
 import xml.dom.minidom
 

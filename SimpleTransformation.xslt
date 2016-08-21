@@ -9,7 +9,9 @@
 #
 # Rules compatible with modsecurity 2.5 to 2.9+
 #
+# License:     Apache License Version 2.0
 # Based on $Id: SimpleTransformation.xslt 55 2007-10-03 22:50:56Z chris@jwall.org $
+#
 <xsl:apply-templates><xsl:with-param name="path" select="''"/></xsl:apply-templates>
 
    &lt;LocationMatch &quot;^.*$&quot;&gt;
