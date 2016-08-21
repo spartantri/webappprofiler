@@ -63,6 +63,15 @@ fields.
 The profileeditor script purpose is to modify the xml profile easily to modify/add/remove in bulk elements from the
 profile instead of going manually over the file manually
 
+PREREQUISITES:
+python 2.7
+zap 2.5
+modsecurity 2.5 and above for running the rules, tested in modsecurity 2.9
+python libraries:
+    pip install python-owasp-zap-v2.4
+    pip install http-parser
+    pip install tabulate
+
 TODO:
 - Response profiling
 - Pattern identification over multiple transactions rather than individual transaction matching
