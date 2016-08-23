@@ -23,6 +23,7 @@ from tabulate import tabulate
 from xml.etree.ElementTree import Element, SubElement, Comment, tostring
 from bs4 import BeautifulSoup
 from simplerules import transform_xml
+from progressbar import draw_progress_bar
 
 # from sys import stdout
 # from sets import Set
@@ -92,8 +93,9 @@ def mandatory_header(filtered, http_header):
     """Define mandatory http headers.
 
     Define mandatory http headers"""
-    mandatory_headers = {'HOST': filtered, 'USER-AGENT': True, 'REFERER': True}
-    if http_header in mandatory_headers:
+    mandatory_headers = {'HOST': filtered, 'USER-AGENT': True, 'REFERER': True, 'CONNECTION': False,
+                         'X-REQUESTED-WITH': False, 'COOKIE': False, 'ACCEPT-ENCODING': False}
+    if str(http_header).upper() in mandatory_headers:
         return mandatory_headers[http_header]
     return False
 
@@ -112,7 +114,7 @@ def mandatory_cookie(filtered, cookie):
     """Define mandatory cookie.
 
     Define mandatory cookie"""
-    mandatory_cookies = {'SessionID': True}
+    mandatory_cookies = {'MandatoryCookie': True, 'SessionID': 'SessionCookie'}
     if cookie in mandatory_cookies:
         return mandatory_cookies[cookie]
     return False
@@ -162,7 +164,7 @@ def regex_builder():
     global simple_regexes, complex_regexes, blacklist_regexes, when_everything_goes_bad_regexes
     # Simple regexes
     simple_regexes = {'0numeric': '\d', '1alphabetic': 'a-zA-Z', '2hex': 'a-fA-F0-9',
-                      '3alphanumeric': 'a-zA-Z0-9', 'punctuation': ',\.\'\-_', '5b64': 'a-zA-Z0-9+/='}
+                      '3alphanumeric': 'a-zA-Z0-9', 'punctuation': ',\.\'\-_', '5b64': 'a-zA-Z0-9\-_='}
     simple_regexes.update({'6numeric_punctuation': '{0}{1}'.format(simple_regexes['punctuation'],
                                                                    simple_regexes['0numeric'])})
     simple_regexes.update({'7alphabetic_punctuation': '{0}{1}'.format(simple_regexes['punctuation'],
@@ -175,17 +177,17 @@ def regex_builder():
     complex_regexes.update(ip_regex)
     date_m = '(?:0?[1-9]|1[012])'
     date_d = '(?:0?[1-9]|[12][0-9]|3[01])'
-    date_Y = '(?:19|20)?[0-9]{2}'
+    date_Y = '^(?:19|20)?[0-9]{2}'
     date_y = '[0-9]{2})'
     date_separator = '([- /.])'
     date_regex = {'datemdY': date_m + date_separator + date_d + '\1' + date_Y,
                   'dateYdm': date_Y + date_separator + date_d + '\1' + date_m,
                   'datedmY': date_d + date_separator + date_m + '\1' + date_Y}
-    email_regex = {'email': '[a-zA-Z0-9_\.\+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-\.]+'}
-    base64_regex = {'base64': '(?:[a-zA-Z0-9+/]{3})*(?:[a-zA-Z0-9+/]{1}==|[a-zA-Z0-9+/]{2}=)?'}
+    email_regex = {'email': '[a-zA-Z0-9_\.\+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-\.]+'}
+    # base64_regex = {'base64': '(?:[a-zA-Z0-9\-_]{3})*(?:[a-zA-Z0-9\-_]{1}==|[a-zA-Z0-9\-_]{2}=)?'}
     complex_regexes.update(date_regex)
     complex_regexes.update(email_regex)
-    complex_regexes.update(base64_regex)
+    # complex_regexes.update(base64_regex)
     # Other regexes
     blacklist_regexes = {'command': '&;|\$`', 'redirect': '<>', 'path': '/\\\\', 'group': '\(\)\{\}'}
     when_everything_goes_bad_regexes = {'hailmary': '.*'}
@@ -198,9 +200,23 @@ def regex_positive(match_this):
     global simple_regexes, complex_regexes, blacklist_regexes, when_everything_goes_bad_regexes
     regex_begin = '^['
     payload_lenght = str(len(match_this))
-    regex_trail = ']{' + payload_lenght + '}$'
+    regex_trail = ']{0,' + payload_lenght + '}$'
     for regex_test in sorted(simple_regexes.keys()):
         regex = regex_begin + simple_regexes[regex_test] + regex_trail
+        if re.match(regex, match_this):
+            new_regex_name = ''.join(['(\'',regex_test,'\', \'',str(payload_lenght),'\')'])
+            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)',(new_regex_name, regex))
+            db.commit()
+            return regex_test, payload_lenght
+    for regex_test in sorted(complex_regexes.keys()):
+        regex = complex_regexes[regex_test]
+        if re.match(regex, match_this):
+            new_regex_name = ''.join(['(\'',regex_test,'\', \'',str(payload_lenght),'\')'])
+            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)',(new_regex_name, regex))
+            db.commit()
+            return regex_test, payload_lenght
+    for regex_test in sorted(when_everything_goes_bad_regexes.keys()):
+        regex = regex_begin + when_everything_goes_bad_regexes[regex_test] + regex_trail
         if re.match(regex, match_this):
             new_regex_name = ''.join(['(\'',regex_test,'\', \'',str(payload_lenght),'\')'])
             cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)',(new_regex_name, regex))
@@ -263,7 +279,6 @@ def regex_comparer(regex1, regex2):
                 return regex1
             else:
                 return regex2
-    pass
 
 
 def make_sets(rows):
@@ -393,6 +408,12 @@ def parse_summary(filtered):
     id_site = cur.lastrowid
     # cur.execute('SELECT id_site from sites WHERE site=?', (site,))
     # id_site = int(cur.fetchone()[0])
+    percent = 0.0
+    progress = 0
+    start = time.time()
+    number_messages = len(items_to_parse)
+    print 'Profile items for Parsing ....', number_messages
+    draw_progress_bar(percent, start, 'Profile items Parsing ....')
     for item in items_to_parse:
         cur.execute('INSERT OR IGNORE INTO resources (id_site, scheme, method, resource) VALUES (?, ?, ?, ?)',
                     (id_site, item[0], item[1], item[2]))
@@ -409,7 +430,10 @@ def parse_summary(filtered):
         # print id_resource
         # print detected_parameters
         # print detected_headers
-    pass
+        progress += 1
+        percent = progress / float(number_messages)
+        draw_progress_bar(percent, start, 'Profile items Parsing ....')
+    return
 
 
 def parse_cookies(cookies):
@@ -445,6 +469,12 @@ def parse_connection_database(filtered):
               '#COO', 'COOK', 'CREGEX+', 'CREGEX-']
     rows = []
     source = get_source()
+    percent = 0.0
+    progress = 0
+    start = time.time()
+    number_messages = len(source)
+    print 'Messages for Processing ....', number_messages
+    draw_progress_bar(percent, start, 'Parsing messages ....')
     for requests in source:
         p = parse_http(requests["responseHeader"])
         if p.get_status_code() in parseablecodes:
@@ -491,16 +521,16 @@ def parse_connection_database(filtered):
                     if regex[0] == 'hailmary':
                         regex_bad = regex_negative(str(querystring_arguments[argument][0]))
                         regex_request_negative.update({str(argument): regex_bad})
-                    elif regex[0] == '5b64':
-                        regex = regex_specific(str(querystring_arguments[argument][0]), 'base64')
+                    # elif regex[0] == '5b64':
+                    #    regex = regex_specific(str(querystring_arguments[argument][0]), 'base64')
                     regex_request_positive.update({str(argument): str(regex)})
                 for httpheader in p.get_headers():
                     regex = regex_positive(str(p.get_headers()[httpheader]))
                     if regex[0] == 'hailmary':
                         regex_bad = regex_negative(str(p.get_headers()[httpheader]))
                         regex_request_http_negative.update({str(httpheader): regex_bad})
-                    elif regex[0] == '5b64':
-                        regex = regex_specific(str(p.get_headers()[httpheader]), 'base64')
+                    # elif regex[0] == '5b64':
+                    #    regex = regex_specific(str(p.get_headers()[httpheader]), 'base64')
                     regex_request_http_positive.update({str(httpheader): str(regex)})
                     # print httpheader, regex[0], regex_bad
                 # print len(p.get_headers()), p.get_headers() ,regex_request_http_positive, regex_request_http_negative
@@ -510,8 +540,8 @@ def parse_connection_database(filtered):
                     if regex[0] == 'hailmary':
                         regex_bad = regex_negative(str(parsed_cookies[cookie]))
                         regex_request_cookie_negative.update({str(cookie): regex_bad})
-                    elif regex[0] == '5b64':
-                        regex = regex_specific(str(parsed_cookies[cookie]), 'base64')
+                    # elif regex[0] == '5b64':
+                    #    regex = regex_specific(str(parsed_cookies[cookie]), 'base64')
                     regex_request_cookie_positive.update({str(cookie): str(regex)})
                     # print cookie, regex[0], regex_bad
                 # if len(parsed_cookies) > 0:
@@ -537,10 +567,15 @@ def parse_connection_database(filtered):
                 db.commit()
                 # print requests
                 write_message(requests)
+        progress += 1
+        percent = progress / float(number_messages)
+        draw_progress_bar(percent, start, 'Parsing messages ....')
     if print_details == 1:
+        print 'Sorting...', time.time()
         print 'HOST :', filtered
         rows.sort(key=lambda x: x[3])
         print tabulate([line for line in rows], headers=header)
+        print 'Ended sorting...',time.time()
     return
 
 
@@ -672,8 +707,13 @@ def parse_locations2(filtered):
         xml_method = SubElement(xml_location, 'Method')
         xml_method.set('value', method)
         # print id_resource, resource, scheme, method
+        parameter_list = ''
         for parameter in parameters:
             arg = parameter[0]
+            if parameter_list == '':
+                parameter_list = ''.join(['/', str(arg).lower(), '/'])
+            else:
+                parameter_list = ''.join([parameter_list, ' /', str(arg).lower(), '/'])
             regex_pos = parameter[1]
             regex = parameter[2]
             xml_parameter = SubElement(xml_method, 'Parameter')
@@ -691,8 +731,13 @@ def parse_locations2(filtered):
                 if mandatory_check is not True:
                     SubElement(xml_parameter, 'Parameter', name=parameter, value=mandatory_check)
             else:
-                xml_parameter.set('required', 'False')
+                xml_parameter.set('optional', 'True')
             # print arg, regex_pos, regex
+        if len(parameter_list) >0:
+            xml_parameter = SubElement(xml_method, 'ParameterList')
+            xml_parameter.set('parameter_list', parameter_list)
+            xml_parameter.set('id', str(item_id))
+            item_id += 1
         cur.execute('SELECT header, headers.regex as regex_pos, regexes.regex ' +
                     'FROM headers, regexes ' +
                     'WHERE headers.id_resource=? and regexes.name=headers.regex ' +
@@ -711,9 +756,11 @@ def parse_locations2(filtered):
             if mandatory_check is not False:
                 xml_header.set('required', 'True')
                 if mandatory_check is not True:
-                    SubElement(xml_header, 'Header', name=http_header, value=mandatory_check)
+                    SubElement(xml_header, 'Header')
+                    xml_header.set('name', http_header)
+                    xml_header.set('value', mandatory_check)
             else:
-                xml_header.set('required', 'False')
+                xml_header.set('optional', 'True')
             # print http_header, regex_pos, regex
         cur.execute('SELECT cookie, cookies.regex as regex_pos, regexes.regex ' +
                     'FROM cookies, regexes ' +
@@ -735,7 +782,14 @@ def parse_locations2(filtered):
                 if mandatory_check is not True:
                     SubElement(xml_cookie, 'Cookie', name=http_cookie, value=mandatory_check)
             else:
-                xml_cookie.set('required', 'False')
+                xml_cookie.set('optional', 'True')
+            if mandatory_check == 'SessionCookie':
+                xml_sessioncookie = SubElement(xml_method, 'SessionCookie')
+                xml_sessioncookie.set('name', http_cookie)
+                xml_sessioncookie.set('regexp', regex)
+                xml_sessioncookie.set('id', str(item_id))
+                item_id += 1
+                xml_sessioncookie.set('required', 'True')
                 # print http_header, regex_pos, regex
     write_output.write(tostring(xml_profile))
     # regex_fixbs4 = re.compile(r'<(?:/)?(?:html|body|head)>')
@@ -829,12 +883,13 @@ def main():
         for summary_field in xrange(0, len(summary_record)):
             row_summary.append(summary_record[summary_field])
         rows_summary.append(row_summary)
+    parse_locations2(filtered)
+    transform_xml(input_xml, transformation_xslt, modsecurity_starting_ruleid)
+    print 'Generated profile and rules for:'
     print 'Records : %d' % (len(rows_summary))
     print tabulate([line for line in rows_summary], headers=header_summary)
     print '\n\n'
-    parse_locations2(filtered)
-    transform_xml(input_xml, transformation_xslt, modsecurity_starting_ruleid)
-    pass
+    return
 
 
 if __name__ == '__main__':

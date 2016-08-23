@@ -5,9 +5,9 @@
 #
 # Author:      spartantri
 #
-# Created:     19/08/2016
-# Copyright:   (c) mleos 2016
-# License:     GPLv3
+# Created:     20/08/2016
+# Copyright:   (c) spartantri 2016
+# License:     Apache License Version 2.0
 # -------------------------------------------------------------------------------
 import re
 audit_log = 'modsec_audit.log'
