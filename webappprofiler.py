@@ -149,7 +149,7 @@ def site_filter():
             for idx, site in enumerate(zap.core.sites):
                 site_list.append(urlparse.urlparse(site).netloc)
                 print idx, urlparse.urlparse(site).netloc
-            site_selection = int(raw_input("Coose a site : "))
+            site_selection = int(raw_input("Choose a site : "))
             print "Setting site filter to: %s" % (site_list[site_selection])
             return str(site_list[site_selection])
         except:
