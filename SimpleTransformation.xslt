@@ -2,7 +2,7 @@
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 <xsl:output method="text"/>
 <xsl:template match="/Profile">
-# $Id: SimpleTransformation.xslt 5 2016-08-21 12:38 spartantri@gmail.com $
+# $Id: SimpleTransformation.xslt 6 2016-08-22 12:38 spartantri@gmail.com $
 #
 # This rule set has been compiled using xslt transformation includes rules for:
 #   Parameters, Headers, Session Cookies and Cookies checked for each registered resource
@@ -15,18 +15,18 @@
 <xsl:apply-templates><xsl:with-param name="path" select="''"/></xsl:apply-templates>
 
    &lt;LocationMatch &quot;^.*$&quot;&gt;
-        #SecRule &amp;TX:METHOD_CHECKED  "!@gt 0" "id:9931733,auditlog,phase:2,log,msg:'Invalid URL requested!',redirect:UnknownURLRequested.html"
-        SecRule &amp;TX:METHOD_CHECKED  "!@gt 0" "id:9931733,auditlog,phase:2,log,msg:'Invalid URL requested! %{REQUEST_FILENAME} with ARGS:%{ARGS_NAMES}',pass"
+        #SecRule &amp;TX:METHOD_CHECKED  "!@gt 0" "id:9931733,auditlog,phase:2,log,msg:'Invalid URL requested! %{REQUEST_METHOD} - %{REQUEST_FILENAME} with ARGS:%{ARGS_NAMES}',redirect:UnknownURLRequested.html"
+        SecRule &amp;TX:METHOD_CHECKED  "!@gt 0" "id:9931733,auditlog,phase:2,log,msg:'Invalid URL requested! %{REQUEST_METHOD} - %{REQUEST_FILENAME} with ARGS:%{ARGS_NAMES}',pass"
    &lt;/LocationMatch&gt;
 </xsl:template>
 
 <xsl:template match="Meta-Inf"># Meta-Information
-#   Author: <xsl:value-of select="Author" />
-#   Version: <xsl:value-of select="Version" />
+#   Author : <xsl:value-of select="./@Author" />
+#   Version: <xsl:value-of select="./@Version" />
  
  
 SecDefaultAction phase:2,t:none,pass,log
- debuggen
+#debuggen
 </xsl:template>
 <xsl:template match="SessionCookie">
 
@@ -91,8 +91,8 @@ SecRule REQUEST_COOKIES:<xsl:value-of select="./@name" /> &quot;@rx <xsl:value-o
 <!--  The following template creates a parameterlist-check    -->
 <!--                                                      -->
 <xsl:template match="ParameterList">
-<xsl:if test="count(@parameter_list) > 0">    SecRule ARGS_NAMES "@rx ^(.*)$" "chain,<xsl:if test="./@id = ''">id:9931733,</xsl:if><xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,capture,t:urlDecode,t:lowercase,pass,setvar:tx.parameter_name='/%{tx.1}/',msg:'Found new parameter %{tx.parameter_name} in %{REQUEST_FILENAME}'"
-    SecRule TX:parameter_name "!@within <xsl:value-of select="./@parameter_list"/>" "t:none,setvar:tx.score=+10,setvar:tx.new_parameter=1"
+<xsl:if test="count(@parameter_list) > 0">    SecRule ARGS_NAMES "@rx ^(.*)$" "chain,<xsl:if test="./@id = ''">id:9931733,</xsl:if><xsl:if test="./@id != ''">id:<xsl:value-of select="./@id"/>,</xsl:if>phase:2,capture,t:urlDecode,t:lowercase,pass,setvar:tx.parameter_name='/%{tx.1}/',msg:'Found new parameter %{tx.parameter_name} in %{REQUEST_METHOD} - %{REQUEST_FILENAME}'"
+    SecRule TX:parameter_name "!@rx (<xsl:value-of select="./@parameter_list"/>)" "t:none,setvar:tx.score=+10,setvar:tx.new_parameter=1"
 </xsl:if>
 <xsl:apply-templates />
 </xsl:template>

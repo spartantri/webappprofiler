@@ -12,19 +12,21 @@
 import xml.dom.minidom
 from xml.etree.ElementTree import SubElement, tostring
 import xml.etree.ElementTree as ET
+import re
 
 input_file = 'test.xml'
 usage = '''Usage:
-    input [file]                            - Change/Display input file
-    print [pretty]                          - Print (Pretty) input file
-    location [add|remove] [target]          - Location List/Add/Remove
-    set [location|method] [target]          - Display/Set current working Location/Method
-    parameter [add|remove] [target]         - Display/add/remove arguments
-    cookie [add|remove] [target]            - Display/add/remove cookies
-    sessioncookie [add|remove] [target]     - Display/add/remove sessioncookies
-    header [add|remove] [target]            - Display/add/remove headers
-    history [#]                             - Display command history
-    exit                                    - Exit'''
+    input [file]                               - Change/Display input file
+    set [location|method] [target]             - Display/Set current working Location/Method
+    print [pretty]                             - Print (Pretty) input file
+    location [add|remove] [target]             - Location List/Add/Remove
+       method [add|remove] [target]            - Location List/Add/Remove
+          cookie [add|remove] [target]         - Display/add/remove cookies
+          header [add|remove] [target]         - Display/add/remove headers
+          parameter [add|remove] [target]      - Display/add/remove arguments
+          sessioncookie [add|remove] [target]  - Display/add/remove sessioncookies
+    history [#]                                - Display command history
+    exit                                       - Exit'''
 location = '*'
 method = '*'
 
@@ -63,7 +65,7 @@ def set_method(adjust='*'):
             set_print()
             return
         else:
-            print 'Allowed methods are * or :', allowed_methods
+            print 'Allowed methods are *', allowed_methods
             adjust = '*'
 
 
@@ -101,8 +103,8 @@ def location_add(target=False):
     xml_location.set('name', resource)
     xml_scheme = SubElement(xml_location, 'Scheme')
     xml_scheme.set('value', scheme)
-    for xml_item in root.iter('Resource'):
-        print xml_item.get('name')
+    # for xml_item in root.iter('Resource'):
+    #    print xml_item.get('name')
     tree.write(input_file)
     return
 
@@ -135,10 +137,107 @@ def location_remove(target=False):
     return
 
 
+def method_print():
+    global location
+    tree = ET.parse(input_file)
+    root = tree.getroot()
+    print 'Method check:'
+    print_warning('Method')
+    for xml_location in root.findall('Context/Resource'):
+        if xml_location.get('name') == location or location == '*':
+            for xml_method in xml_location:
+                if xml_method.tag == 'Method':
+                    if xml_method.get('value') == method or method == '*':
+                        print xml_location.get('name')
+                        print ' ', xml_method.tag, xml_method.get('value')
+    return
+
+
+def method_add(target=False):
+    global location
+    tree = ET.parse(input_file)
+    root = tree.getroot()
+    allowed_methods = ['GET', 'POST', 'PUT', 'OPTIONS', 'DELETE', 'HEAD']
+    add_method = 1
+    elements_added = 0
+    print 'Adding Method :'
+    print_warning('Method')
+    if not target:
+        arg = raw_input("Enter Method name : ").split(' ')[0].upper()
+        if arg not in allowed_methods:
+            print 'Non standard method selected!'
+        print 'Confirm values'
+        print 'Location : %s' % location
+        print 'Method   : %s' % method
+        confirmation = str(raw_input("Accept values : Y/N ").split(' ')[0]).upper()
+        if confirmation != 'Y':
+            print ' Aborting...'
+            return
+    else:
+        arg = target
+    for xml_location in root.findall('Context/Resource'):
+        if xml_location.get('name') == location or location == '*':
+            for xml_method in xml_location:
+                if xml_method.tag == 'Method':
+                    if xml_method.get('value') == arg:
+                        print '%s already have that method!' % xml_location.get('name')
+                        add_method = 0
+            if add_method == 1:
+                xml_element = SubElement(xml_location, 'Method')
+                xml_element.set('value', arg)
+                elements_added += 1
+            add_method = 1
+    if elements_added > 0:
+        print 'Added %d Methods' % elements_added
+    else:
+        print 'Location %s not available or %s Method already existing' % (location, arg)
+    tree.write(input_file)
+    return
+
+
+def method_remove(target=False):
+    global location, method
+    tree = ET.parse(input_file)
+    root = tree.getroot()
+    elements_removed = 0
+    element = 'Method'
+    print 'Removing %s :' % element
+    print_warning(element)
+    if not target:
+        arg = raw_input("Enter %s name * for all in scope: " % element).split(' ')[0].upper()
+        print 'Confirm values'
+        print 'Location : %s' % location
+        print 'Method   : %s' % arg
+        confirmation = str(raw_input("Accept values : Y/N ").split(' ')[0]).upper()
+        if confirmation != 'Y':
+            print ' Aborting...'
+            return
+        elif confirmation == 'Y' and arg == '*':
+            confirmation = str(raw_input("Delete all methods in %s location : Y/N " % location).split(' ')[0]).upper()
+            if confirmation != 'Y':
+                print ' Aborting...'
+                return
+    else:
+        arg = target
+    for xml_location in root.findall('Context/Resource'):
+        if xml_location.get('name') == location or location == '*':
+            for xml_method in xml_location:
+                if xml_method.tag == 'Method':
+                    if xml_method.get('value') == arg or arg == '*':
+                        xml_location.remove(xml_method)
+                        elements_removed += 1
+    if elements_removed > 0:
+        print 'Removed %d %s' % (elements_removed, element)
+    else:
+        print 'Location %s or Method %s not available' % (location, method)
+    tree.write(input_file)
+    return
+
+
 def print_warning(element):
     if location == '*':
         print 'Location set to * will print the %s from all locations in the profile' % element
-    if method == '*':
+    if method == '*' and element != 'Method':
         print 'Method set to * will print the %s from all methods' % element
     return
 
@@ -197,6 +296,12 @@ def element_add(element, target=False, regex='any'):
                         xml_element.set('regexp', regex)
                         xml_element.set('id', '9931733')
                         elements_added += 1
+                        for xml_parameterlist in xml_method.findall('ParameterList'):
+                            xml_parameterlist.set('parameter_list','|'.join([
+                                xml_parameterlist.get('parameter_list'), re.escape(arg)]))
+                        if not xml_method.findall('ParameterList'):
+                            xml_element = SubElement(xml_method, 'ParameterList')
+                            xml_element.set('parameter_list', re.escape(arg))
     if elements_added > 0:
         print 'Added %d %s' % (elements_added, element)
     else:
@@ -328,6 +433,14 @@ def interactive_menu():
                         element_remove(options[command], target, regex)
                     else:
                         element_remove(options[command])
+        elif command == 'method':
+            if not action:
+                method_print()
+            else:
+                if action == 'add':
+                    method_add(target.upper())
+                elif action == 'remove':
+                    method_remove(target.upper())
         elif command == 'history':
             if not action:
                 for idx, line in enumerate(command_history):

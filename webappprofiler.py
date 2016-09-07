@@ -14,9 +14,7 @@ import sqlite3
 import time
 import urlparse
 import ast
-# import xml.etree.cElementTree as ET
 # import logging
-# from pprint import pprint
 from zapv2 import ZAPv2
 from http_parser.pyparser import HttpParser
 from tabulate import tabulate
@@ -49,6 +47,11 @@ simple_regexes = {}
 complex_regexes = {}
 blacklist_regexes = {}
 when_everything_goes_bad_regexes = {}
+mandatory_headers = {'HOST': True, 'USER-AGENT': True, 'REFERER': True, 'CONNECTION': False,
+                     'X-REQUESTED-WITH': False, 'COOKIE': False, 'ACCEPT-ENCODING': False}
+mandatory_cookies = {'MandatoryCookie': True, 'SessionID': 'SessionCookie'}
+mandatory_parameters = {'Username': True, 'Password': True, 'SessionID': True}
+Author = 'WebAppProfiler - Author Name'
 
 
 def init_db(cur, zero=False):
@@ -93,8 +96,9 @@ def mandatory_header(filtered, http_header):
     """Define mandatory http headers.
 
     Define mandatory http headers"""
-    mandatory_headers = {'HOST': filtered, 'USER-AGENT': True, 'REFERER': True, 'CONNECTION': False,
-                         'X-REQUESTED-WITH': False, 'COOKIE': False, 'ACCEPT-ENCODING': False}
+    global mandatory_headers
+    if not audit_log:
+        mandatory_headers['HOST'] = filtered
     if str(http_header).upper() in mandatory_headers:
         return mandatory_headers[http_header]
     return False
@@ -104,7 +108,7 @@ def mandatory_parameter(filtered, parameter):
     """Define mandatory parameters.
 
     Define mandatory parameters"""
-    mandatory_parameters = {'Username': True, 'Password': True, 'SessionID': True}
+    global mandatory_parameters
     if parameter in mandatory_parameters:
         return mandatory_parameters[parameter]
     return False
@@ -114,10 +118,11 @@ def mandatory_cookie(filtered, cookie):
     """Define mandatory cookie.
 
     Define mandatory cookie"""
-    mandatory_cookies = {'MandatoryCookie': True, 'SessionID': 'SessionCookie'}
+    global mandatory_cookies
     if cookie in mandatory_cookies:
         return mandatory_cookies[cookie]
     return False
+
 
 def parse_http(rsp):
     """Define parser.
@@ -204,22 +209,22 @@ def regex_positive(match_this):
     for regex_test in sorted(simple_regexes.keys()):
         regex = regex_begin + simple_regexes[regex_test] + regex_trail
         if re.match(regex, match_this):
-            new_regex_name = ''.join(['(\'',regex_test,'\', \'',str(payload_lenght),'\')'])
-            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)',(new_regex_name, regex))
+            new_regex_name = ''.join(['(\'',regex_test,'\', \'', str(payload_lenght), '\')'])
+            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)', (new_regex_name, regex))
             db.commit()
             return regex_test, payload_lenght
     for regex_test in sorted(complex_regexes.keys()):
         regex = complex_regexes[regex_test]
         if re.match(regex, match_this):
-            new_regex_name = ''.join(['(\'',regex_test,'\', \'',str(payload_lenght),'\')'])
-            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)',(new_regex_name, regex))
+            new_regex_name = ''.join(['(\'',regex_test,'\', \'', str(payload_lenght), '\')'])
+            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)', (new_regex_name, regex))
             db.commit()
             return regex_test, payload_lenght
     for regex_test in sorted(when_everything_goes_bad_regexes.keys()):
         regex = regex_begin + when_everything_goes_bad_regexes[regex_test] + regex_trail
         if re.match(regex, match_this):
-            new_regex_name = ''.join(['(\'',regex_test,'\', \'',str(payload_lenght),'\')'])
-            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)',(new_regex_name, regex))
+            new_regex_name = ''.join(['(\'',regex_test,'\', \'', str(payload_lenght), '\')'])
+            cur.execute('INSERT OR IGNORE INTO regexes (name, regex) VALUES (?, ?)', (new_regex_name, regex))
             db.commit()
             return regex_test, payload_lenght
     return 'hailmary', payload_lenght
@@ -261,8 +266,12 @@ def regex_specific(match_this, regex_test):
 def regex_comparer(regex1, regex2):
     if '\', \'' in regex1:
         regexa = regex1.split(', ')
+    else:
+        regexa = False
     if '\', \'' in regex2:
         regexb = regex2.split(', ')
+    else:
+        regexb = False
     if not regexa and not regexb:
         if regex1 > regex2:
             return regex1
@@ -406,8 +415,6 @@ def parse_summary(filtered):
     cur.execute('INSERT OR IGNORE INTO sites (site) VALUES (?)', (site,))
     db.commit()
     id_site = cur.lastrowid
-    # cur.execute('SELECT id_site from sites WHERE site=?', (site,))
-    # id_site = int(cur.fetchone()[0])
     percent = 0.0
     progress = 0
     start = time.time()
@@ -427,9 +434,6 @@ def parse_summary(filtered):
         detected_headers = write_headers(id_resource, item_details, detected_headers)
         detected_parameters = write_parameters(id_resource, item_details, detected_parameters)
         detected_cookies = write_cookies(id_resource, item_details,detected_cookies)
-        # print id_resource
-        # print detected_parameters
-        # print detected_headers
         progress += 1
         percent = progress / float(number_messages)
         draw_progress_bar(percent, start, 'Profile items Parsing ....')
@@ -448,7 +452,6 @@ def parse_cookies(cookies):
     # cookie_list = Cookie.SimpleCookie()
     # cookie_list.load(cookies)
     for item in cookie_list:
-        # print type(item), item, item.split('=',1)[0], item.split('=',1)[1]
         parsed_cookies.update({item.split('=', 1)[0].strip(): item.split('=', 1)[1]})
     # print parsed_cookies
     return parsed_cookies
@@ -516,8 +519,6 @@ def parse_connection_database(filtered):
                 regex_request_cookie_negative = {}
                 for argument in querystring_arguments:
                     regex = regex_positive(str(querystring_arguments[argument][0]))
-                    # print str(querystring_arguments[argument][0])
-                    # print regex
                     if regex[0] == 'hailmary':
                         regex_bad = regex_negative(str(querystring_arguments[argument][0]))
                         regex_request_negative.update({str(argument): regex_bad})
@@ -532,20 +533,14 @@ def parse_connection_database(filtered):
                     # elif regex[0] == '5b64':
                     #    regex = regex_specific(str(p.get_headers()[httpheader]), 'base64')
                     regex_request_http_positive.update({str(httpheader): str(regex)})
-                    # print httpheader, regex[0], regex_bad
-                # print len(p.get_headers()), p.get_headers() ,regex_request_http_positive, regex_request_http_negative
                 for cookie in parsed_cookies:
                     regex = regex_positive(str(parsed_cookies[cookie]))
-                    # print regex, str(parsed_cookies[cookie])
                     if regex[0] == 'hailmary':
                         regex_bad = regex_negative(str(parsed_cookies[cookie]))
                         regex_request_cookie_negative.update({str(cookie): regex_bad})
                     # elif regex[0] == '5b64':
                     #    regex = regex_specific(str(parsed_cookies[cookie]), 'base64')
                     regex_request_cookie_positive.update({str(cookie): str(regex)})
-                    # print cookie, regex[0], regex_bad
-                # if len(parsed_cookies) > 0:
-                    # print len(parsed_cookies), parsed_cookies ,regex_request_cookie_positive, regex_request_cookie_negative
                 if print_details == 1:
                     row = [int(requests["id"]), url_scheme, str(method), str(uri), len(querystring_arguments),
                            querystring_arguments, regex_request_positive, regex_request_negative, len(p.get_headers()),
@@ -553,8 +548,6 @@ def parse_connection_database(filtered):
                            len(parsed_cookies.keys()), parsed_cookies.keys(), regex_request_cookie_positive,
                            regex_request_cookie_negative]
                     rows.append(row)
-                    # %d, "%s", "%s", "%s", %d, "%s", "%s", "%s"
-                    # print row[0], re.escape(row[1]), re.escape(row[2]), re.escape(row[3]), row[4],row[5],row[6],row[7]
                 db.execute('INSERT INTO summary (id_message, scheme, method, resource, num_parameter, parameters, ' +
                            'regex_pos, regex_neg, num_httpheader, httpheaders, regex_httpheader_pos, ' +
                            'regex_httpheader_neg, num_cookies, cookies, regex_cookie_pos, regex_cookie_neg) ' +
@@ -565,7 +558,6 @@ def parse_connection_database(filtered):
                             str(regex_request_http_negative), len(parsed_cookies.keys()), str(parsed_cookies.keys()),
                             str(regex_request_cookie_positive), str(regex_request_cookie_negative)))
                 db.commit()
-                # print requests
                 write_message(requests)
         progress += 1
         percent = progress / float(number_messages)
@@ -575,11 +567,11 @@ def parse_connection_database(filtered):
         print 'HOST :', filtered
         rows.sort(key=lambda x: x[3])
         print tabulate([line for line in rows], headers=header)
-        print 'Ended sorting...',time.time()
+        print 'Ended sorting...', time.time()
     return
 
 
-def parse_locations(filtered):
+def parse_locations_discontinued(filtered):
     """Parse contents and dump into database.
 
                 Parse contents, summarize data and dump into database."""
@@ -678,14 +670,16 @@ def parse_locations2(filtered):
     """Parse contents and dump into database.
 
                 Parse contents, summarize data and dump into database."""
-    global id_site, modsecurity_starting_ruleid
+    global id_site, modsecurity_starting_ruleid, Author
     item_id = modsecurity_starting_ruleid
     write_output = open(output_file, 'w')
     write_output.write('<?xml version="1.0"?>')
     write_output.write('<?xml-stylesheet type="text/xsl" version="2.0" href="SimpleTransformation.xslt" ?>')
     xml_profile = Element('Profile')
     xml_context = SubElement(xml_profile, 'Context')
-    # xml_tree = ElementTree(xml_profile)
+    xml_meta = SubElement(xml_context, 'Meta-Inf')
+    xml_meta.set('Author', Author)
+    xml_meta.set('Version', str(time.time()))
     cur.execute('SELECT id_resource, resource, scheme, method ' +
                 'FROM resources WHERE id_site=(?) ' +
                 'ORDER BY scheme, resource, method', (id_site,))
@@ -706,14 +700,15 @@ def parse_locations2(filtered):
         xml_scheme.set('value', scheme)
         xml_method = SubElement(xml_location, 'Method')
         xml_method.set('value', method)
-        # print id_resource, resource, scheme, method
         parameter_list = ''
         for parameter in parameters:
             arg = parameter[0]
             if parameter_list == '':
-                parameter_list = ''.join(['/', str(arg).lower(), '/'])
+                parameter_list = ''.join([re.escape(str(arg).lower())])
+                # parameter_list = ''.join(['/', str(arg).lower(), '/'])
             else:
-                parameter_list = ''.join([parameter_list, ' /', str(arg).lower(), '/'])
+                parameter_list = ''.join([parameter_list, '|', re.escape(str(arg).lower())])
+                # parameter_list = ''.join([parameter_list, ' /', str(arg).lower(), '/'])
             regex_pos = parameter[1]
             regex = parameter[2]
             xml_parameter = SubElement(xml_method, 'Parameter')
@@ -733,7 +728,7 @@ def parse_locations2(filtered):
             else:
                 xml_parameter.set('optional', 'True')
             # print arg, regex_pos, regex
-        if len(parameter_list) >0:
+        if len(parameter_list) > 0:
             xml_parameter = SubElement(xml_method, 'ParameterList')
             xml_parameter.set('parameter_list', parameter_list)
             xml_parameter.set('id', str(item_id))
@@ -798,7 +793,6 @@ def parse_locations2(filtered):
     write_output.close()
     modsecurity_starting_ruleid = item_id
     return
-
 
 
 def xml_prettify(xml, encoding=None, formatter="minimal"):
@@ -874,7 +868,6 @@ def main():
                 'num_httpheader, httpheaders, regex_httpheader_pos, regex_httpheader_neg, num_cookies, cookies, ' +
                 'regex_cookie_pos, regex_cookie_neg FROM summary')
     summary = cur.fetchall()
-    # header_summary = ['scheme', 'method', 'resource', 'num_parameter', 'parameters', 'regex_pos', 'regex_neg']
     header_summary = ['SCHEME', 'METHOD', 'URI', '#ARG', 'ARGS', 'REGEX+', 'REGEX-', '#HEA', 'HEAD', 'HREGEX+',
                       'HREGEX-', '#COO', 'COOK', 'CREGEX+', 'CREGEX-']
     rows_summary = []
