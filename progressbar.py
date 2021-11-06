@@ -10,11 +10,12 @@
 # License:     Apache License Version 2.0
 # -------------------------------------------------------------------------------
 
-import sys, time
+import sys
+import time
+
 
 def draw_progress_bar(percent, start, message, barLen=20):
     sys.stdout.write("\r")
-    percent = percent
     progress = ""
     status = message
     for i in range(barLen):
@@ -27,7 +28,7 @@ def draw_progress_bar(percent, start, message, barLen=20):
         estimatedRemaining = int((elapsedTime / percent) - elapsedTime)
     except ZeroDivisionError:
         estimatedRemaining = 0
-    if (percent == 1.0):
+    if percent == 1.0:
         sys.stdout.write("[ %s ] %.1f%% Elapsed: %im %02is ETA: Done!\n" %
             (progress, percent * 100, int(elapsedTime)/60, int(elapsedTime)%60))
         sys.stdout.flush()
@@ -48,4 +49,4 @@ if __name__ == "__main__":
     for x in xrange (1,301):
         percent = x/float(301)
         time.sleep(0.01)
-        draw_progress_bar(percent,start,'Item no# %d' % (x))
+        draw_progress_bar(percent, start, 'Item no# %d' % (x))
