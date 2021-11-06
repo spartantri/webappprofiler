@@ -48,4 +48,4 @@ if __name__ == "__main__":
     for x in xrange (1,301):
         percent = x/float(301)
         time.sleep(0.01)
-        draw_progress_bar(percent,start,'Iten no# %d' % (x))
+        draw_progress_bar(percent,start,'Item no# %d' % (x))
